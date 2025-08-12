@@ -157,8 +157,8 @@
 <script>
 /* ---------------------------- state ---------------------------- */
 const acceptExt = ['.mp3','.flac','.m4a','.aac','.ogg','.wav','.wma'];
-let files = [];              // [{file, url, meta, pictureBlob, changed, canWrite, status}]
-let current = -1;            // index
+let files = [];              // [{file, url, meta, pictureBlob, changed, canWrite, status, _mark}]
+let current = -1;
 let applying = false;
 
 /* ---------------------------- helpers ---------------------------- */
@@ -185,6 +185,69 @@ const renderNameWithTemplate = (t, meta, fallback) => {
     .replace(/[\\/:*?"<>|]+/g,'').trim() || fallback;
 };
 function updateProgress(i,total){ const pct = total? Math.round((i/total)*100):0; $('bar').style.width = pct+'%'; }
+
+/* --------- universal native-picture extractor (APIC/covr/etc.) --------- */
+function extractFirstPictureFromNative(native){
+  if(!native) return null;
+  // native is an object keyed by tag format, each value is an array of {id, value}
+  const all = [];
+  for (const arr of Object.values(native)) {
+    if (Array.isArray(arr)) all.push(...arr);
+  }
+  // Prefer front cover-ish frames first
+  const pref = ['APIC','PIC','COVER ART (FRONT)','METADATA_BLOCK_PICTURE','COVERART','COVERARTMIME','covr'];
+  // Scan in order of preference
+  for (const key of pref) {
+    const hit = all.find(t => String(t.id || '').toUpperCase() === key.toUpperCase());
+    if (hit) {
+      const val = hit.value;
+      // Common shapes:
+      // 1) { format: 'image/jpeg', data: Uint8Array(...) }
+      if (val && val.data && (val.format || val.mime)) {
+        const type = val.format || val.mime || 'image/jpeg';
+        try { return new Blob([val.data], { type }); } catch {}
+      }
+      // 2) MP4 covr often is an array (music-metadata normalizes, but be safe)
+      if (Array.isArray(val) && val.length) {
+        const item = val[0];
+        if (item && item.data) {
+          const type = item.format || item.mime || 'image/jpeg';
+          try { return new Blob([item.data], { type }); } catch {}
+        }
+        // Sometimes it's already a Uint8Array/Buffer
+        if (val[0] instanceof Uint8Array) {
+          try { return new Blob([val[0]], { type:'image/jpeg' }); } catch {}
+        }
+      }
+      // 3) Raw Buffer/Uint8Array directly
+      if (val instanceof Uint8Array) {
+        try { return new Blob([val], { type:'image/jpeg' }); } catch {}
+      }
+      // 4) String base64 (rare)
+      if (typeof val === 'string' && /^data:image\//.test(val)) {
+        try {
+          const blob = dataURLtoBlob(val);
+          if (blob) return blob;
+        } catch {}
+      }
+    }
+  }
+  // Fallback: try ANY entry that looks like an image payload
+  for (const t of all) {
+    const v = t.value;
+    if (v && v.data && (v.format || v.mime)) {
+      const type = v.format || v.mime || 'image/jpeg';
+      try { return new Blob([v.data], { type }); } catch {}
+    }
+  }
+  return null;
+}
+function dataURLtoBlob(dataurl) {
+  const arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n);
+  while(n--) u8arr[n] = bstr.charCodeAt(n);
+  return new Blob([u8arr], {type:mime});
+}
 
 /* -------------------------- file intake ------------------------- */
 const pick = $('pick'), drop = $('drop'), list = $('filelist');
@@ -237,7 +300,10 @@ async function selectFile(idx){
 async function loadMeta(it){
   if(it.meta && it.meta.__loaded) return; // already parsed
   try{
-    const { common, format } = await musicMetadata.parseBlob(it.file);
+    // Ask for native tags too so we can scan all frames/atoms
+    const parsed = await musicMetadata.parseBlob(it.file, { native: true });
+    const { common, format, native } = parsed;
+
     const tr = common.track || {}, ds = common.disk || {};
     it.meta = {
       __loaded:true,
@@ -256,11 +322,19 @@ async function loadMeta(it){
       duration: format.duration || null,
       container: format.container
     };
-    // artwork
+
+    // Artwork: try common first, then native scan (APIC/covr/etc.)
     if (common.picture && common.picture.length){
       const pic = common.picture[0];
       it.pictureBlob = new Blob([pic.data], { type: pic.format || 'image/jpeg' });
-    } else it.pictureBlob = null;
+    } else {
+      const blob = extractFirstPictureFromNative(native);
+      it.pictureBlob = blob || null;
+    }
+
+    // Debug (optional): see what native tags are present
+    // console.log('Native tags:', native);
+
   }catch(e){
     // fallback: filename parse
     const name = it.file.name.replace(/\.[^/.]+$/,'');
@@ -428,7 +502,6 @@ $('applySelected').addEventListener('click', async ()=>{
       .reduce((acc,id)=>{ const v=getVal(id); if(v) acc[id]=v; return acc; },{});
     const pic = files[current]?.pictureBlob || null;
 
-    // apply to those flagged changed==true by our mark toggle
     const targets = files.filter(f=>f._mark);
     if(!targets.length){ toast('No files marked.','warn'); return; }
 
