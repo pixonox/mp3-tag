@@ -1,469 +1,485 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced ID3v2 Metadata Editor</title>
-    
-    <!-- Tailwind CSS for modern styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- jsmediatags for READING metadata -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.7/jsmediatags.min.js"></script>
-    
-    <!-- id3-writer for WRITING metadata -->
-    <script src="https://cdn.jsdelivr.net/npm/id3-writer@1.2.1/dist/id3-writer.min.js"></script>
-
-    <style>
-        /* Custom font and scrollbar for a polished look */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1e293b; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        .drag-over {
-            border-color: #38bdf8;
-            background-color: #0c4a6e;
-        }
-    </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Music Tag Studio (Client‑Side)</title>
+<style>
+  :root{
+    --bg:#0f1220; --bg2:#171a2c; --panel:#1e2240; --panel2:#24284d;
+    --text:#e6e8ee; --muted:#aab0c2; --brand:#6fa8ff; --ok:#66bb6a; --warn:#ffb74d; --err:#ef5350;
+    --border:rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(135deg,#151833,#0f1220 60%,#0a0d1a);color:var(--text)}
+  .app{max-width:1200px;margin:24px auto;border:1px solid var(--border);border-radius:16px;overflow:hidden;background:rgba(23,26,44,.92);box-shadow:0 30px 70px rgba(0,0,0,.35)}
+  .header{padding:18px 20px;background:linear-gradient(135deg,#1c2042,#252a54);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+  .header h1{font-size:18px;font-weight:600;margin:0}
+  .header .sub{opacity:.8;font-size:13px}
+  .main{display:grid;grid-template-columns:320px 1fr;min-height:70vh}
+  .sidebar{border-right:1px solid var(--border);background:linear-gradient(180deg,#1a1e3e,#151939)}
+  .drop{margin:14px;border:2px dashed #4a9eff44;border-radius:12px;padding:16px;text-align:center;cursor:pointer;background:linear-gradient(135deg,#20244b,#262b55);transition:.2s}
+  .drop:hover{transform:translateY(-1px);box-shadow:0 10px 20px rgba(79,156,255,.15)}
+  .drop .hint{font-size:12px;color:var(--muted)}
+  .filelist{padding:8px 8px 120px;overflow:auto;max-height:calc(100% - 120px)}
+  .fileitem{display:flex;gap:8px;align-items:center;padding:10px;border-radius:10px;margin:6px;background:linear-gradient(135deg,#232753,#282d5d);border:1px solid var(--border);cursor:pointer}
+  .fileitem.active{outline:2px solid var(--brand)}
+  .filemeta{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .filemeta .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .filemeta .mini{font-size:12px;color:var(--muted)}
+  .status-dot{width:10px;height:10px;border-radius:50%}
+  .s-ok{background:var(--ok)} .s-warn{background:var(--warn)} .s-err{background:var(--err)} .s-idle{background:#6e7690}
+  .content{padding:20px}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:14px}
+  .group{background:linear-gradient(135deg,#232753,#2a2f63);border:1px solid var(--border);border-radius:12px;padding:14px}
+  .group label{display:block;font-size:12px;letter-spacing:.4px;text-transform:uppercase;color:#cfd6ea;margin-bottom:8px}
+  .group input,.group textarea,.group select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid #3a3f6b;background:#151833;color:var(--text);outline:none}
+  .group input:focus,.group textarea:focus,.group select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(111,168,255,.18)}
+  .art{display:flex;gap:14px;align-items:center}
+  .art img{width:140px;height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--border);background:#0d1022}
+  .art .box{flex:1}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+  .btn{padding:10px 16px;border:none;border-radius:10px;font-weight:600;cursor:pointer}
+  .primary{background:linear-gradient(135deg,#4a9eff,#6fa8ff);color:#051025}
+  .secondary{background:linear-gradient(135deg,#4caf50,#45a049);color:#05140a}
+  .danger{background:linear-gradient(135deg,#f44336,#d32f2f);color:#2b0a0a}
+  .ghost{background:#2a2f63;border:1px solid var(--border);color:#cfd6ea}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+  .player{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,#232753,#2a2f63);border:1px solid var(--border);border-radius:12px;padding:8px 10px}
+  .tagbar{position:sticky;bottom:0;left:0;right:0;background:linear-gradient(180deg,rgba(13,16,34,.0),rgba(13,16,34,.9));padding:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .unsaved{display:none;gap:10px;align-items:center}
+  .unsaved.show{display:flex}
+  .progress{height:8px;border-radius:999px;background:#2a2f63;border:1px solid var(--border);overflow:hidden}
+  .progress > div{height:100%;width:0;background:linear-gradient(90deg,#6fa8ff,#66bb6a)}
+  .toasts{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:5}
+  .toast{background:#1f2449;border:1px solid var(--border);padding:10px 12px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.35);font-size:14px}
+  .toast.ok{border-color:#2e7d32} .toast.warn{border-color:#f9a825} .toast.err{border-color:#c62828}
+  .minirow{display:flex;gap:10px}
+  @media (max-width:980px){ .main{grid-template-columns:1fr} .filelist{max-height:280px} .grid{grid-template-columns:1fr} }
+</style>
 </head>
-<body class="bg-slate-900 text-slate-300 antialiased">
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🎵 Music Tag Studio</h1>
+    <div class="sub">Fast, client‑side tag editing • MP3 write support</div>
+  </div>
 
-    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
-        
-        <!-- Header Section -->
-        <header class="text-center mb-8">
-            <h1 class="text-4xl sm:text-5xl font-bold text-white mb-2">
-                <span class="text-sky-400">ID3v2</span> Metadata Editor
-            </h1>
-            <p class="text-slate-400 text-lg">Edit and save music metadata directly in your browser.</p>
-        </header>
-
-        <main class="bg-slate-800 rounded-2xl shadow-2xl shadow-slate-900/50 border border-slate-700">
-            
-            <!-- File Upload Section -->
-            <div id="fileUpload" class="p-8 text-center border-4 border-dashed border-slate-600 rounded-2xl cursor-pointer transition-all duration-300 hover:border-sky-500 hover:bg-slate-700/50">
-                <div class="flex flex-col items-center justify-center">
-                    <svg class="w-16 h-16 text-slate-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" /></svg>
-                    <p class="text-xl font-semibold text-white">Drop your music file here or click to browse</p>
-                    <p class="text-slate-400 mt-1">Supports MP3 files for reading and writing tags.</p>
-                </div>
-                <input type="file" id="fileInput" class="hidden" accept=".mp3">
-            </div>
-
-            <!-- Editor Section (hidden by default) -->
-            <div id="editorSection" class="hidden p-4 sm:p-8">
-                
-                <!-- File Info -->
-                <div id="fileInfo" class="bg-slate-700/50 p-4 rounded-lg mb-6 border-l-4 border-sky-500"></div>
-
-                <!-- Metadata Form Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                    <!-- Basic Info -->
-                    <div class="field-group"><label for="title" class="form-label">Title</label><input type="text" id="title" class="form-input" placeholder="Song Title"></div>
-                    <div class="field-group"><label for="artist" class="form-label">Artist</label><input type="text" id="artist" class="form-input" placeholder="Artist Name"></div>
-                    <div class="field-group"><label for="album" class="form-label">Album</label><input type="text" id="album" class="form-input" placeholder="Album Title"></div>
-                    
-                    <!-- Detailed Info -->
-                    <div class="field-group"><label for="albumArtist" class="form-label">Album Artist</label><input type="text" id="albumArtist" class="form-input" placeholder="Album Artist"></div>
-                    <div class="field-group"><label for="year" class="form-label">Year</label><input type="number" id="year" class="form-input" placeholder="e.g., 2024"></div>
-                    <div class="field-group"><label for="track" class="form-label">Track Number</label><input type="text" id="track" class="form-input" placeholder="e.g., 1/12 or 1"></div>
-                    <div class="field-group"><label for="genre" class="form-label">Genre</label><input type="text" id="genre" class="form-input" placeholder="e.g., Rock"></div>
-                    <div class="field-group"><label for="composer" class="form-label">Composer</label><input type="text" id="composer" class="form-input" placeholder="Composer Name"></div>
-                    
-                    <!-- Album Artwork -->
-                    <div class="field-group md:col-span-2 lg:col-span-3 bg-slate-900/50 p-4 rounded-lg">
-                        <label class="form-label">Album Artwork</label>
-                        <div class="mt-2 flex items-start gap-4">
-                            <div id="artworkPreview" class="w-32 h-32 bg-slate-700 rounded-md flex-shrink-0 flex items-center justify-center">
-                                <svg class="w-12 h-12 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>
-                            </div>
-                            <div class="flex-grow">
-                                <div id="artworkInfo" class="text-sm text-slate-400 mb-2">No artwork loaded.</div>
-                                <label for="artworkInput" class="btn btn-secondary cursor-pointer">
-                                    <span>Upload Image</span>
-                                    <input type="file" id="artworkInput" class="hidden" accept="image/jpeg,image/png">
-                                </label>
-                                <button id="removeArtworkBtn" class="btn btn-danger ml-2 hidden">Remove</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Comments -->
-                    <div class="field-group md:col-span-2 lg:col-span-3">
-                        <label for="comment" class="form-label">Comments</label>
-                        <textarea id="comment" class="form-input" rows="3" placeholder="Additional comments or notes"></textarea>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="flex flex-wrap gap-4 justify-center border-t border-slate-700 pt-6">
-                    <button id="reloadMetadataBtn" class="btn btn-secondary">🔄 Reload Original</button>
-                    <button id="saveMetadataBtn" class="btn btn-primary">💾 Save to File</button>
-                    <button id="clearAllBtn" class="btn btn-danger">🗑️ Clear Fields</button>
-                </div>
-
-                <!-- Status Message -->
-                <div id="statusMessage" class="mt-6 text-center"></div>
-            </div>
-        </main>
+  <div class="main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="drop" id="drop">
+        <div style="font-size:28px">⬆️</div>
+        <div style="margin:6px 0 4px">Drop audio files or click to pick</div>
+        <div class="hint">MP3 write • FLAC/M4A/OGG/WAV read</div>
+        <input id="pick" type="file" multiple accept=".mp3,.flac,.m4a,.aac,.ogg,.wav,.wma" style="display:none"/>
+      </div>
+      <div class="filelist" id="filelist"></div>
     </div>
-    
-    <!-- Confirmation Modal -->
-    <div id="confirmModal" class="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-slate-800 rounded-lg shadow-xl max-w-sm w-full p-6">
-            <h3 id="modalTitle" class="text-xl font-bold text-white mb-4">Are you sure?</h3>
-            <p id="modalMessage" class="text-slate-300 mb-6">This action cannot be undone.</p>
-            <div class="flex justify-end gap-4">
-                <button id="modalCancelBtn" class="btn btn-secondary">Cancel</button>
-                <button id="modalConfirmBtn" class="btn btn-danger">Confirm</button>
-            </div>
+
+    <!-- Content -->
+    <div class="content">
+      <div class="toolbar">
+        <div class="player">
+          <audio id="player" controls preload="metadata" style="width:280px"></audio>
+          <span id="duration" class="mini" style="font-size:12px;color:var(--muted)">--:--</span>
         </div>
+        <div class="minirow">
+          <input id="template" class="ghost" placeholder="Filename template e.g. {artist} - {title}" style="min-width:260px"/>
+          <button class="btn ghost" id="renamePreview">Preview Name</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="group"><label>Title</label><input id="title" placeholder="Song Title"/></div>
+        <div class="group"><label>Artist</label><input id="artist" placeholder="Artist"/></div>
+        <div class="group"><label>Album</label><input id="album" placeholder="Album"/></div>
+        <div class="group"><label>Album Artist</label><input id="albumArtist" placeholder="Album Artist"/></div>
+        <div class="group"><label>Year</label><input id="year" type="number" min="1900" max="2100" placeholder="2025"/></div>
+        <div class="group"><label>Track</label><input id="track" placeholder="1/12"/></div>
+        <div class="group"><label>Disc</label><input id="disc" placeholder="1/2"/></div>
+        <div class="group">
+          <label>Genre</label>
+          <select id="genre">
+            <option value="">Select Genre</option>
+            <option>Electronic</option><option>Dance</option><option>House</option>
+            <option>Pop</option><option>Rock</option><option>Hip-Hop</option>
+            <option>R&B</option><option>Alternative</option><option>Classical</option>
+            <option>Jazz</option><option>Country</option><option>Folk</option>
+          </select>
+        </div>
+        <div class="group"><label>Composer</label><input id="composer" placeholder="Composer"/></div>
+        <div class="group" style="grid-column:1/-1">
+          <label>Album Artwork</label>
+          <div class="art">
+            <img id="cover" alt="Cover"/>
+            <div class="box">
+              <div class="mini" id="artinfo" style="font-size:12px;color:var(--muted)">No artwork</div>
+              <div class="controls">
+                <input type="file" id="artpick" accept="image/*" style="display:none"/>
+                <button class="btn ghost" id="artbtn">Upload</button>
+                <button class="btn ghost" id="artremove">Remove</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="group" style="grid-column:1/-1">
+          <label>Comment</label>
+          <textarea id="comment" placeholder="Notes…"></textarea>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn secondary" id="reload">Reload</button>
+        <button class="btn primary" id="save">Save</button>
+        <button class="btn danger" id="clear">Clear Fields</button>
+        <button class="btn ghost" id="applySelected">Batch Apply (selected fields → selected files)</button>
+      </div>
     </div>
-    
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center z-50 hidden">
-        <div class="w-16 h-16 border-4 border-sky-400 border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-white text-lg mt-4">Saving file...</p>
+  </div>
+
+  <div class="tagbar">
+    <div class="unsaved" id="unsaved"><strong>Unsaved changes</strong> • Don’t forget to save</div>
+    <div style="display:flex;gap:10px;align-items:center;padding:0 12px;width:360px">
+      <div class="progress" style="flex:1"><div id="bar"></div></div>
+      <button class="btn ghost" id="saveAll">Save All MP3s</button>
     </div>
+  </div>
+</div>
 
-    <!-- Tailwind CSS Class Definitions for Dynamic Classes -->
-    <script>
-        // This helper function applies Tailwind classes to form elements
-        function applyTailwindStyles() {
-            const formLabelClasses = 'block text-sm font-medium text-slate-400 mb-1';
-            const formInputClasses = 'w-full bg-slate-700/50 border-2 border-slate-600 rounded-md p-2.5 text-slate-200 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition';
-            const btnClasses = 'inline-flex items-center justify-center px-5 py-2.5 rounded-md font-semibold text-sm shadow-sm transition-all duration-200';
-            const btnPrimaryClasses = 'bg-sky-500 text-white hover:bg-sky-600 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-sky-500';
-            const btnSecondaryClasses = 'bg-slate-600 text-slate-200 hover:bg-slate-500 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-slate-500';
-            const btnDangerClasses = 'bg-red-600 text-white hover:bg-red-700 focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-red-500';
+<div class="toasts" id="toasts"></div>
 
-            document.querySelectorAll('.form-label').forEach(el => el.className = formLabelClasses);
-            document.querySelectorAll('.form-input').forEach(el => el.className = formInputClasses);
-            document.querySelectorAll('.btn').forEach(el => el.classList.add(...btnClasses.split(' ')));
-            document.querySelectorAll('.btn-primary').forEach(el => el.classList.add(...btnPrimaryClasses.split(' ')));
-            document.querySelectorAll('.btn-secondary').forEach(el => el.classList.add(...btnSecondaryClasses.split(' ')));
-            document.querySelectorAll('.btn-danger').forEach(el => el.classList.add(...btnDangerClasses.split(' ')));
-        }
-        applyTailwindStyles();
-    </script>
+<!-- libs -->
+<script src="https://unpkg.com/music-metadata-browser/dist/music-metadata-browser.min.js"></script>
+<script src="https://unpkg.com/browser-id3-writer@4.4.0/dist/browser-id3-writer.min.js"></script>
 
-    <script>
-        // --- DOM Element References ---
-        const dom = {
-            fileUpload: document.getElementById('fileUpload'),
-            fileInput: document.getElementById('fileInput'),
-            editorSection: document.getElementById('editorSection'),
-            fileInfo: document.getElementById('fileInfo'),
-            artworkPreview: document.getElementById('artworkPreview'),
-            artworkInfo: document.getElementById('artworkInfo'),
-            artworkInput: document.getElementById('artworkInput'),
-            removeArtworkBtn: document.getElementById('removeArtworkBtn'),
-            statusMessage: document.getElementById('statusMessage'),
-            loadingOverlay: document.getElementById('loadingOverlay'),
-            // Modals
-            confirmModal: document.getElementById('confirmModal'),
-            modalTitle: document.getElementById('modalTitle'),
-            modalMessage: document.getElementById('modalMessage'),
-            modalCancelBtn: document.getElementById('modalCancelBtn'),
-            modalConfirmBtn: document.getElementById('modalConfirmBtn'),
-            // Buttons
-            reloadMetadataBtn: document.getElementById('reloadMetadataBtn'),
-            saveMetadataBtn: document.getElementById('saveMetadataBtn'),
-            clearAllBtn: document.getElementById('clearAllBtn'),
-            // Form Fields
-            fields: {
-                title: document.getElementById('title'),
-                artist: document.getElementById('artist'),
-                album: document.getElementById('album'),
-                albumArtist: document.getElementById('albumArtist'),
-                year: document.getElementById('year'),
-                track: document.getElementById('track'),
-                genre: document.getElementById('genre'),
-                composer: document.getElementById('composer'),
-                comment: document.getElementById('comment'),
-            }
-        };
+<script>
+/* ---------------------------- state ---------------------------- */
+const acceptExt = ['.mp3','.flac','.m4a','.aac','.ogg','.wav','.wma'];
+let files = [];              // [{file, url, meta, pictureBlob, changed, canWrite, status}]
+let current = -1;            // index
+let applying = false;
 
-        // --- State Management ---
-        let state = {
-            currentFile: null,
-            currentArtworkFile: null,
-            originalMetadata: {},
-        };
+/* ---------------------------- helpers ---------------------------- */
+const $ = id=>document.getElementById(id);
+const setVal = (id,v)=>{ if(v!=null) $(id).value = v; };
+const getVal = id => ( $(id).value || '' ).trim();
+const parsePair = s => { if(!s) return {no:null,of:null}; const [a,b]=String(s).split('/').map(x=>x.trim()); return {no:a?+a:null, of:b?+b:null}; };
+const toast = (msg,type='ok')=>{
+  const el=document.createElement('div'); el.className='toast '+type; el.textContent=msg;
+  $('toasts').appendChild(el); setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 2600);
+};
+const setUnsaved = on => $('unsaved').classList.toggle('show', !!on);
+const extOf = name => '.'+(name.split('.').pop()||'').toLowerCase();
+const isAudioOk = name => acceptExt.includes(extOf(name));
+const fmtSec = s => { if(!s && s!==0) return '--:--'; const m=Math.floor(s/60); const ss=Math.round(s%60).toString().padStart(2,'0'); return `${m}:${ss}`; };
+const renderNameWithTemplate = (t, meta, fallback) => {
+  if(!t) return fallback;
+  return t
+    .replace(/\{title\}/gi, meta.title||'')
+    .replace(/\{artist\}/gi, meta.artist||'')
+    .replace(/\{album\}/gi, meta.album||'')
+    .replace(/\{track\}/gi, meta.trackText||'')
+    .replace(/\{disc\}/gi, meta.discText||'')
+    .replace(/[\\/:*?"<>|]+/g,'').trim() || fallback;
+};
+function updateProgress(i,total){ const pct = total? Math.round((i/total)*100):0; $('bar').style.width = pct+'%'; }
 
-        // --- Event Listeners ---
-        function setupEventListeners() {
-            dom.fileUpload.addEventListener('click', () => dom.fileInput.click());
-            dom.fileUpload.addEventListener('dragover', handleDragOver);
-            dom.fileUpload.addEventListener('dragleave', handleDragLeave);
-            dom.fileUpload.addEventListener('drop', handleDrop);
-            dom.fileInput.addEventListener('change', handleFileSelect);
-            dom.artworkInput.addEventListener('change', handleArtworkSelect);
-            dom.removeArtworkBtn.addEventListener('click', removeArtwork);
-            dom.reloadMetadataBtn.addEventListener('click', reloadMetadata);
-            dom.saveMetadataBtn.addEventListener('click', saveMetadata);
-            dom.clearAllBtn.addEventListener('click', () => {
-                showConfirmationModal(
-                    'Clear All Fields?',
-                    'Are you sure you want to clear all metadata fields? This action cannot be undone.',
-                    clearAllFields
-                );
-            });
-            dom.modalCancelBtn.addEventListener('click', hideConfirmationModal);
-        }
+/* -------------------------- file intake ------------------------- */
+const pick = $('pick'), drop = $('drop'), list = $('filelist');
+drop.addEventListener('click',()=>pick.click());
+pick.addEventListener('change', e => addFiles([...e.target.files]));
+drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.style.transform='translateY(-1px)'; });
+drop.addEventListener('dragleave', e=>{ drop.style.transform=''; });
+drop.addEventListener('drop', e=>{
+  e.preventDefault(); drop.style.transform='';
+  if(!e.dataTransfer.files?.length) return;
+  addFiles([...e.dataTransfer.files]);
+});
 
-        // --- File Handling ---
-        function handleDragOver(e) { e.preventDefault(); dom.fileUpload.classList.add('drag-over'); }
-        function handleDragLeave(e) { e.preventDefault(); dom.fileUpload.classList.remove('drag-over'); }
-        
-        function handleDrop(e) {
-            e.preventDefault();
-            dom.fileUpload.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type === 'audio/mpeg') {
-                handleFile(file);
-            } else {
-                showStatus('Please drop an MP3 file.', 'error');
-            }
-        }
+async function addFiles(incoming){
+  const added = incoming.filter(f => isAudioOk(f.name));
+  if(!added.length){ toast('Drop supported audio files only','warn'); return; }
+  for(const f of added){
+    const url = URL.createObjectURL(f);
+    files.push({file:f,url,meta:{},pictureBlob:null,changed:false,canWrite:extOf(f.name)==='.mp3',status:'idle'});
+  }
+  renderList();
+  if(current<0) selectFile(0);
+  toast(`Added ${added.length} file${added.length>1?'s':''}`);
+}
 
-        function handleFileSelect(e) {
-            const file = e.target.files[0];
-            if (file) handleFile(file);
-        }
+/* -------------------------- list & select ----------------------- */
+function renderList(){
+  list.innerHTML='';
+  files.forEach((it,idx)=>{
+    const row = document.createElement('div');
+    row.className='fileitem'+(idx===current?' active':'');
+    row.addEventListener('click',()=>selectFile(idx));
+    const dot = document.createElement('div'); dot.className='status-dot s-'+(it.status==='ok'?'ok':it.status==='err'?'err':it.changed?'warn':'idle');
+    const meta = document.createElement('div'); meta.className='filemeta';
+    const name = document.createElement('div'); name.className='name'; name.textContent = it.file.name;
+    const mini = document.createElement('div'); mini.className='mini'; mini.textContent = it.canWrite?'MP3 (write)':'Read‑only';
+    meta.append(name,mini); row.append(dot,meta); list.appendChild(row);
+  });
+}
 
-        function handleFile(file) {
-            state.currentFile = file;
-            state.currentArtworkFile = null;
-            showFileInfo(file);
-            loadMetadataFromFile(file);
-            dom.editorSection.classList.remove('hidden');
-            dom.fileUpload.classList.add('hidden');
-            showStatus('File loaded. You can now edit the metadata.', 'success');
-        }
+async function selectFile(idx){
+  current = idx; renderList();
+  const it = files[idx];
+  await loadMeta(it);
+  fillForm(it);
+  attachPlayer(it);
+}
 
-        function showFileInfo(file) {
-            const fileSize = (file.size / (1024 * 1024)).toFixed(2);
-            dom.fileInfo.innerHTML = `
-                <p class="font-semibold text-white"><strong>File:</strong> ${file.name}</p>
-                <p class="text-sm text-slate-400"><strong>Size:</strong> ${fileSize} MB | <strong>Type:</strong> ${file.type}</p>
-            `;
-        }
+/* ---------------------------- reading --------------------------- */
+async function loadMeta(it){
+  if(it.meta && it.meta.__loaded) return; // already parsed
+  try{
+    const { common, format } = await musicMetadata.parseBlob(it.file);
+    const tr = common.track || {}, ds = common.disk || {};
+    it.meta = {
+      __loaded:true,
+      title: common.title || '',
+      artist: (common.artists && common.artists.join(', ')) || common.artist || '',
+      album: common.album || '',
+      albumArtist: common.albumartist || '',
+      year: common.year || '',
+      trackNo: tr.no || null, trackOf: tr.of || null,
+      discNo: ds.no || null, discOf: ds.of || null,
+      trackText: tr.no ? (tr.of ? `${tr.no}/${tr.of}` : `${tr.no}`) : '',
+      discText: ds.no ? (ds.of ? `${ds.no}/${ds.of}` : `${ds.no}`) : '',
+      genre: (common.genre && common.genre[0]) || '',
+      composer: (common.composer && common.composer[0]) || '',
+      comment: (common.comment && common.comment[0]) || '',
+      duration: format.duration || null,
+      container: format.container
+    };
+    // artwork
+    if (common.picture && common.picture.length){
+      const pic = common.picture[0];
+      it.pictureBlob = new Blob([pic.data], { type: pic.format || 'image/jpeg' });
+    } else it.pictureBlob = null;
+  }catch(e){
+    // fallback: filename parse
+    const name = it.file.name.replace(/\.[^/.]+$/,'');
+    const pats=[/^(.+?)\s*-\s*(.+?)\s*-\s*(.+)$/,/^(.+?)\s*-\s*(.+)$/,/^(\d+)\.\s*(.+?)\s*-\s*(.+)$/,/(.+)/];
+    let m;
+    if((m=name.match(pats[0]))){ it.meta = {title:m[3].trim(),artist:m[1].trim(),album:m[2].trim()}; }
+    else if((m=name.match(pats[1]))){ it.meta = {title:m[2].trim(),artist:m[1].trim()}; }
+    else if((m=name.match(pats[2]))){ it.meta = {title:m[3].trim(),artist:m[2].trim(),trackText:m[1]}; }
+    else { it.meta = {title:name}; }
+    it.pictureBlob = null;
+  }
+}
 
-        // --- Metadata Reading (jsmediatags) ---
-        function loadMetadataFromFile(file) {
-            clearAllFields();
-            showStatus('Reading metadata...', 'warning');
-            window.jsmediatags.read(file, {
-                onSuccess: (tag) => {
-                    const tags = tag.tags;
-                    state.originalMetadata = {
-                        title: tags.title || '',
-                        artist: tags.artist || '',
-                        album: tags.album || '',
-                        albumArtist: tags.TPE2?.data || '',
-                        year: tags.year || '',
-                        track: tags.track || '',
-                        genre: tags.genre || '',
-                        composer: tags.TCOM?.data || '',
-                        comment: tags.comment?.text || '',
-                        picture: tags.picture || null
-                    };
-                    populateForm(state.originalMetadata);
-                    showStatus('Metadata loaded successfully.', 'success');
-                },
-                onError: (error) => {
-                    console.error('Error reading metadata:', error);
-                    showStatus('Could not read metadata. You can add it manually.', 'error');
-                    state.originalMetadata = {}; // Reset on error
-                    populateForm({});
-                }
-            });
-        }
+/* ---------------------------- UI fill --------------------------- */
+function fillForm(it){
+  setVal('title', it.meta.title||'');
+  setVal('artist', it.meta.artist||'');
+  setVal('album', it.meta.album||'');
+  setVal('albumArtist', it.meta.albumArtist||'');
+  setVal('year', it.meta.year||'');
+  setVal('track', it.meta.trackText|| (it.meta.trackNo?String(it.meta.trackNo):''));
+  setVal('disc', it.meta.discText|| (it.meta.discNo?String(it.meta.discNo):''));
+  setVal('genre', it.meta.genre||'');
+  setVal('composer', it.meta.composer||'');
+  setVal('comment', it.meta.comment||'');
+  if (it.pictureBlob){
+    const u = URL.createObjectURL(it.pictureBlob);
+    $('cover').src = u; $('artinfo').textContent = `${Math.round(it.pictureBlob.size/1024)} KB`;
+  } else { $('cover').src=''; $('artinfo').textContent = 'No artwork'; }
+  $('duration').textContent = fmtSec(it.meta.duration);
+  setUnsaved(it.changed);
+}
 
-        function populateForm(metadata) {
-            dom.fields.title.value = metadata.title || '';
-            dom.fields.artist.value = metadata.artist || '';
-            dom.fields.album.value = metadata.album || '';
-            dom.fields.albumArtist.value = metadata.albumArtist || '';
-            dom.fields.year.value = metadata.year || '';
-            dom.fields.track.value = metadata.track || '';
-            dom.fields.genre.value = metadata.genre || '';
-            dom.fields.composer.value = metadata.composer || '';
-            dom.fields.comment.value = metadata.comment || '';
-            
-            if (metadata.picture) {
-                displayArtworkFromTag(metadata.picture);
-            } else {
-                removeArtwork();
-            }
-        }
+/* ---------------------------- player ---------------------------- */
+function attachPlayer(it){
+  $('player').src = it.url;
+  $('player').onloadedmetadata = ()=> $('duration').textContent = fmtSec($('player').duration||it.meta.duration);
+}
 
-        // --- Artwork Handling ---
-        function handleArtworkSelect(e) {
-            const file = e.target.files[0];
-            if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
-                state.currentArtworkFile = file;
-                displayArtworkFromFile(file);
-                showStatus('New artwork selected. Remember to save.', 'success');
-            } else {
-                showStatus('Please select a JPEG or PNG image.', 'error');
-            }
-        }
-        
-        function displayArtworkFromTag(picture) {
-            const blob = new Blob([new Uint8Array(picture.data)], { type: picture.format });
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                dom.artworkPreview.innerHTML = `<img src="${e.target.result}" alt="Album Artwork" class="w-full h-full object-cover rounded-md">`;
-                dom.artworkInfo.textContent = `Existing artwork loaded (${(blob.size / 1024).toFixed(1)} KB).`;
-                dom.removeArtworkBtn.classList.remove('hidden');
-            };
-            reader.readAsDataURL(blob);
-        }
+/* ---------------------- field change tracking ------------------- */
+['title','artist','album','albumArtist','year','track','disc','genre','composer','comment'].forEach(id=>{
+  $(id).addEventListener('input', ()=>{
+    if(current<0) return;
+    files[current].changed = true;
+    setUnsaved(true);
+    renderList();
+  });
+});
 
-        function displayArtworkFromFile(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                dom.artworkPreview.innerHTML = `<img src="${e.target.result}" alt="New Album Artwork" class="w-full h-full object-cover rounded-md">`;
-                dom.artworkInfo.textContent = `New artwork: ${file.name} (${(file.size / 1024).toFixed(1)} KB).`;
-                dom.removeArtworkBtn.classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-        }
+/* ----------------------------- artwork -------------------------- */
+$('artbtn').addEventListener('click',()=> $('artpick').click());
+$('artpick').addEventListener('change', async e=>{
+  if(!e.target.files.length) return;
+  const f = e.target.files[0];
+  if(!f.type.startsWith('image/')) return toast('Pick an image','warn');
+  const blob = await normalizeArtwork(f, 3000, .9);
+  files[current].pictureBlob = blob;
+  files[current].changed = true; setUnsaved(true); renderList();
+  const u = URL.createObjectURL(blob); $('cover').src=u; $('artinfo').textContent=`${Math.round(blob.size/1024)} KB (normalized)`;
+});
+$('artremove').addEventListener('click',()=>{
+  if(current<0) return;
+  files[current].pictureBlob = null; $('cover').src=''; $('artinfo').textContent='No artwork';
+  files[current].changed = true; setUnsaved(true); renderList();
+});
+async function normalizeArtwork(fileOrBlob, maxSide=3000, quality=.9){
+  const src = URL.createObjectURL(fileOrBlob);
+  const img = new Image(); img.src = src; await img.decode(); URL.revokeObjectURL(src);
+  const w=img.width,h=img.height, scale=Math.min(1, maxSide/Math.max(w,h));
+  const c=document.createElement('canvas'); c.width=Math.round(w*scale); c.height=Math.round(h*scale);
+  const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,c.width,c.height);
+  return await new Promise(res=>c.toBlob(res,'image/jpeg',quality));
+}
 
-        function removeArtwork() {
-            dom.artworkPreview.innerHTML = `<svg class="w-12 h-12 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>`;
-            dom.artworkInfo.textContent = 'No artwork loaded.';
-            dom.artworkInput.value = '';
-            state.currentArtworkFile = null;
-            state.originalMetadata.picture = null; // Mark original artwork as removed
-            dom.removeArtworkBtn.classList.add('hidden');
-        }
+/* ---------------------------- reload/clear ---------------------- */
+$('reload').addEventListener('click', async ()=>{
+  if(current<0) return toast('No file selected','warn');
+  files[current].meta.__loaded = false;
+  await loadMeta(files[current]);
+  fillForm(files[current]);
+  files[current].changed = false; setUnsaved(false); renderList();
+  toast('Metadata reloaded');
+});
+$('clear').addEventListener('click', ()=>{
+  ['title','artist','album','albumArtist','year','track','disc','genre','composer','comment'].forEach(id=> setVal(id,''));
+  if(current>=0){ files[current].changed = true; setUnsaved(true); renderList(); }
+});
 
-        // --- Core Actions ---
-        function clearAllFields() {
-            Object.values(dom.fields).forEach(field => field.value = '');
-            removeArtwork();
-            showStatus('All fields cleared.', 'warning');
-        }
-        
-        function reloadMetadata() {
-            if (state.currentFile) {
-                populateForm(state.originalMetadata);
-                state.currentArtworkFile = null; // Reset any newly selected artwork
-                showStatus('Original metadata reloaded.', 'success');
-            }
-        }
+/* ---------------------------- save (single) --------------------- */
+$('save').addEventListener('click', ()=> saveOne(current));
+$('saveAll').addEventListener('click', saveAll);
+async function saveOne(idx){
+  if(idx<0) return;
+  const it = files[idx];
+  if(!it.canWrite) { toast('This format is read‑only (MP3 only for now).','warn'); return; }
 
-        async function saveMetadata() {
-            if (!state.currentFile) {
-                showStatus('No file loaded.', 'error');
-                return;
-            }
-            
-            dom.loadingOverlay.classList.remove('hidden');
-            showStatus('Preparing to save...', 'warning');
+  // collect
+  const meta = {
+    title:getVal('title'), artist:getVal('artist'), album:getVal('album'), albumArtist:getVal('albumArtist'),
+    year:getVal('year'), track:getVal('track'), disc:getVal('disc'), genre:getVal('genre'),
+    composer:getVal('composer'), comment:getVal('comment')
+  };
+  if (meta.year && (+meta.year<1900 || +meta.year>2100)) return toast('Year must be 1900–2100','err');
 
-            try {
-                const songBuffer = await readFileAsArrayBuffer(state.currentFile);
-                const writer = new ID3Writer(songBuffer);
+  const tr=parsePair(meta.track), ds=parsePair(meta.disc);
 
-                // Set text frames
-                writer.setFrame('TIT2', dom.fields.title.value)
-                      .setFrame('TPE1', [dom.fields.artist.value])
-                      .setFrame('TALB', dom.fields.album.value)
-                      .setFrame('TPE2', dom.fields.albumArtist.value)
-                      .setFrame('TYER', dom.fields.year.value)
-                      .setFrame('TRCK', dom.fields.track.value)
-                      .setFrame('TCON', [dom.fields.genre.value])
-                      .setFrame('TCOM', [dom.fields.composer.value])
-                      .setFrame('COMM', { description: '', text: dom.fields.comment.value, language: 'eng' });
+  try{
+    const buf = await it.file.arrayBuffer();
+    const writer = new ID3Writer(buf);
+    writer
+      .setFrame('TIT2', meta.title||'')
+      .setFrame('TPE1', meta.artist ? [meta.artist] : [])
+      .setFrame('TALB', meta.album||'')
+      .setFrame('TPE2', meta.albumArtist||'')
+      .setFrame('TDRC', meta.year||'')
+      .setFrame('TRCK', tr.no ? (tr.of?`${tr.no}/${tr.of}`:`${tr.no}`) : '')
+      .setFrame('TPOS', ds.no ? (ds.of?`${ds.no}/${ds.of}`:`${ds.no}`) : '')
+      .setFrame('TCON', meta.genre||'')
+      .setFrame('TCOM', meta.composer||'')
+      .setFrame('COMM', {description:'', text: meta.comment||''});
+    if (it.pictureBlob){
+      const apic = new Uint8Array(await it.pictureBlob.arrayBuffer());
+      writer.setFrame('APIC', {type:3, data:apic, description:'cover'});
+    }
+    writer.addTag();
+    const out = writer.getBlob();
 
-                // Handle artwork
-                if (state.currentArtworkFile) {
-                    const artworkBuffer = await readFileAsArrayBuffer(state.currentArtworkFile);
-                    writer.setFrame('APIC', {
-                        type: 3,
-                        data: artworkBuffer,
-                        description: 'Cover'
-                    });
-                } else if (!state.originalMetadata.picture) {
-                    writer.removeFrame('APIC');
-                }
+    // filename template
+    const t = getVal('template');
+    const tmpMeta = { ...it.meta, title:meta.title, artist:meta.artist, album:meta.album,
+                      trackText: meta.track, discText: meta.disc };
+    const base = renderNameWithTemplate(t, tmpMeta, it.file.name.replace(/\.[^/.]+$/,''));
+    const name = base.endsWith('.mp3') ? base : base + '.mp3';
 
-                writer.addTag();
-                const taggedSongBlob = writer.getBlob();
-                const taggedSongUrl = writer.getURL();
+    download(out, name);
+    it.changed = false; it.status='ok'; setUnsaved(false); renderList();
+    toast('Saved ✔︎','ok');
+  }catch(e){ console.error(e); it.status='err'; renderList(); toast('Save failed','err'); }
+}
+function download(blob, filename){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+}
 
-                // Trigger download
-                const link = document.createElement('a');
-                link.href = taggedSongUrl;
-                link.download = state.currentFile.name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                
-                showStatus('File saved successfully!', 'success');
-                
-                // Refresh the UI with the new file data
-                const newFile = new File([taggedSongBlob], state.currentFile.name, {type: 'audio/mpeg', lastModified: Date.now()});
-                handleFile(newFile);
+/* ---------------------------- save all -------------------------- */
+async function saveAll(){
+  const mp3s = files.map((f,i)=>({f,i})).filter(x=>files[x.i].canWrite);
+  if(!mp3s.length) return toast('No MP3s to save','warn');
+  let done=0;
+  for(const {i} of mp3s){
+    await new Promise(res=>setTimeout(res, 10)); // keep UI responsive
+    await saveOne(i);
+    done++; updateProgress(done, mp3s.length);
+  }
+  setTimeout(()=>updateProgress(0,1), 600);
+}
 
-            } catch (error) {
-                console.error('Error saving metadata:', error);
-                showStatus('Failed to save metadata. See console for details.', 'error');
-            } finally {
-                dom.loadingOverlay.classList.add('hidden');
-            }
-        }
+/* ---------------------- batch apply selected -------------------- */
+$('applySelected').addEventListener('click', async ()=>{
+  if(!files.length) return toast('No files loaded','warn');
+  applying = !applying;
+  toast(applying? 'Click files to mark for apply (click again to unmark). Click the button again to apply.' : 'Applying to marked files…','warn');
+  if(!applying){
+    // gather current editor values (only non-empty fields)
+    const vals = ['title','artist','album','albumArtist','year','track','disc','genre','composer','comment']
+      .reduce((acc,id)=>{ const v=getVal(id); if(v) acc[id]=v; return acc; },{});
+    const pic = files[current]?.pictureBlob || null;
 
-        // --- Utility & UI Functions ---
-        function readFileAsArrayBuffer(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => reject(reader.error);
-                reader.readAsArrayBuffer(file);
-            });
-        }
+    // apply to those flagged changed==true by our mark toggle
+    const targets = files.filter(f=>f._mark);
+    if(!targets.length){ toast('No files marked.','warn'); return; }
 
-        function showStatus(message, type = 'success') {
-            const colors = {
-                success: 'text-green-400',
-                error: 'text-red-400',
-                warning: 'text-yellow-400'
-            };
-            dom.statusMessage.innerHTML = `<p class="${colors[type]}">${message}</p>`;
-        }
+    for(const it of targets){
+      Object.assign(it.meta, {
+        title: vals.title ?? it.meta.title,
+        artist: vals.artist ?? it.meta.artist,
+        album: vals.album ?? it.meta.album,
+        albumArtist: vals.albumArtist ?? it.meta.albumArtist,
+        year: vals.year ?? it.meta.year,
+        trackText: vals.track ?? it.meta.trackText,
+        discText: vals.disc ?? it.meta.discText,
+        genre: vals.genre ?? it.meta.genre,
+        composer: vals.composer ?? it.meta.composer,
+        comment: vals.comment ?? it.meta.comment
+      });
+      if (pic) it.pictureBlob = pic;
+      it.changed = true;
+    }
+    renderList();
+    toast(`Applied to ${targets.length} file${targets.length>1?'s':''}. Now “Save All MP3s”.`,'ok');
+  }
+});
+list.addEventListener('click', e=>{
+  if(!applying) return;
+  const row = e.target.closest('.fileitem'); if(!row) return;
+  const idx = [...list.children].indexOf(row);
+  files[idx]._mark = !files[idx]._mark;
+  row.style.outline = files[idx]._mark ? '2px dashed #ffb74d' : '';
+});
 
-        function showConfirmationModal(title, message, onConfirm) {
-            dom.modalTitle.textContent = title;
-            dom.modalMessage.textContent = message;
-            dom.confirmModal.classList.remove('hidden');
-            
-            // Clone and replace the confirm button to remove old event listeners
-            const newConfirmBtn = dom.modalConfirmBtn.cloneNode(true);
-            dom.modalConfirmBtn.parentNode.replaceChild(newConfirmBtn, dom.modalConfirmBtn);
-            newConfirmBtn.addEventListener('click', () => {
-                onConfirm();
-                hideConfirmationModal();
-            });
-            // Re-assign the DOM reference
-            dom.modalConfirmBtn = newConfirmBtn;
-        }
+/* ----------------------- rename preview ------------------------- */
+$('renamePreview').addEventListener('click', ()=>{
+  if(current<0) return;
+  const it = files[current];
+  const name = renderNameWithTemplate(getVal('template'),
+    {...it.meta, trackText: getVal('track') || it.meta.trackText, discText:getVal('disc')||it.meta.discText},
+    it.file.name.replace(/\.[^/.]+$/,''));
+  toast('Preview: ' + (name.endsWith('.mp3')?name:name+'.mp3'), 'ok');
+});
 
-        function hideConfirmationModal() {
-            dom.confirmModal.classList.add('hidden');
-        }
-
-        // --- Initialisation ---
-        document.addEventListener('DOMContentLoaded', setupEventListeners);
-
-    </script>
+/* ----------------------- keyboard shortcuts --------------------- */
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') [...document.querySelectorAll('.toast')].forEach(t=>t.remove());
+  if (e.ctrlKey||e.metaKey){
+    const k=e.key.toLowerCase();
+    if(k==='s'){ e.preventDefault(); if(current>=0) saveOne(current); }
+    if(k==='o'){ e.preventDefault(); pick.click(); }
+    if(k==='b'){ e.preventDefault(); saveAll(); }
+  }
+});
+</script>
 </body>
 </html>
