@@ -490,22 +490,35 @@
             try {
                 showStatus('Reading metadata from file...', 'warning');
                 
+                // Clear fields first
+                clearAllFields();
+                
                 // Use jsmediatags to parse metadata
                 window.jsmediatags.read(file, {
                     onSuccess: function(tag) {
+                        console.log('Metadata found:', tag.tags); // Debug log
                         const tags = tag.tags;
                         
                         // Auto-fill form fields with existing metadata
-                        document.getElementById('title').value = tags.title || '';
-                        document.getElementById('artist').value = tags.artist || '';
-                        document.getElementById('album').value = tags.album || '';
-                        document.getElementById('albumArtist').value = tags.albumartist || tags.TPE2 || '';
-                        document.getElementById('year').value = tags.year || '';
-                        document.getElementById('track').value = tags.track || '';
-                        document.getElementById('genre').value = tags.genre || '';
-                        document.getElementById('composer').value = tags.composer || tags.TCOM || '';
-                        document.getElementById('comment').value = tags.comment ? 
-                            (tags.comment.text || tags.comment) : '';
+                        if (tags.title) document.getElementById('title').value = tags.title;
+                        if (tags.artist) document.getElementById('artist').value = tags.artist;
+                        if (tags.album) document.getElementById('album').value = tags.album;
+                        if (tags.albumartist || tags.TPE2) document.getElementById('albumArtist').value = tags.albumartist || tags.TPE2;
+                        if (tags.year) document.getElementById('year').value = tags.year;
+                        if (tags.track) document.getElementById('track').value = tags.track;
+                        if (tags.genre) document.getElementById('genre').value = tags.genre;
+                        if (tags.composer || tags.TCOM) document.getElementById('composer').value = tags.composer || tags.TCOM;
+                        
+                        // Handle comment field - it can be an object or string
+                        let commentValue = '';
+                        if (tags.comment) {
+                            if (typeof tags.comment === 'object' && tags.comment.text) {
+                                commentValue = tags.comment.text;
+                            } else if (typeof tags.comment === 'string') {
+                                commentValue = tags.comment;
+                            }
+                        }
+                        if (commentValue) document.getElementById('comment').value = commentValue;
                         
                         // Handle album artwork
                         if (tags.picture) {
@@ -530,55 +543,84 @@
                             track: tags.track || '',
                             genre: tags.genre || '',
                             composer: tags.composer || tags.TCOM || '',
-                            comment: tags.comment || '',
+                            comment: commentValue,
                             hasArtwork: !!tags.picture
                         };
+                        
+                        // Show debug info in console
+                        console.log('Original metadata stored:', originalMetadata);
                     },
                     onError: function(error) {
                         console.error('Metadata parsing error:', error);
-                        showStatus('Could not read metadata from file. You can still add new metadata manually.', 'warning');
                         
-                        // Fallback: try to extract info from filename
-                        const filename = file.name.replace(/\.[^/.]+$/, "");
-                        const parts = filename.split(' - ');
-                        
-                        if (parts.length >= 2) {
-                            document.getElementById('artist').value = parts[0].trim() || '';
-                            document.getElementById('title').value = parts[1].trim() || '';
-                        }
-                        
-                        // Clear other fields
-                        clearMetadataFields();
+                        // Try fallback method - extract info from filename
+                        tryFilenameExtraction(file);
+                        showStatus('Could not read ID3 metadata. Trying filename extraction...', 'warning');
                     }
                 });
                 
             } catch (error) {
-                console.error('Metadata parsing error:', error);
-                showStatus('Could not read metadata from file. You can still add new metadata manually.', 'warning');
-                
-                // Fallback: try to extract info from filename
-                const filename = file.name.replace(/\.[^/.]+$/, "");
-                const parts = filename.split(' - ');
-                
-                if (parts.length >= 2) {
-                    document.getElementById('artist').value = parts[0].trim() || '';
-                    document.getElementById('title').value = parts[1].trim() || '';
-                }
-                
-                // Clear other fields
-                clearMetadataFields();
+                console.error('General metadata error:', error);
+                tryFilenameExtraction(file);
+                showStatus('Could not read metadata. You can add metadata manually.', 'warning');
             }
         }
 
-        function clearMetadataFields() {
-            const fields = ['album', 'albumArtist', 'year', 'track', 'genre', 'composer', 'comment'];
+        function tryFilenameExtraction(file) {
+            // Fallback: try to extract info from filename
+            const filename = file.name.replace(/\.[^/.]+$/, "");
+            console.log('Trying filename extraction for:', filename);
+            
+            // Common patterns: "Artist - Title", "Artist - Album - Track", etc.
+            const patterns = [
+                /^(.+?)\s*-\s*(.+?)\s*-\s*(.+)$/, // Artist - Album - Title
+                /^(.+?)\s*-\s*(.+)$/, // Artist - Title
+                /^(\d+)\.\s*(.+?)\s*-\s*(.+)$/, // 01. Artist - Title
+                /^(.+)$/ // Just title
+            ];
+            
+            let matched = false;
+            for (const pattern of patterns) {
+                const match = filename.match(pattern);
+                if (match) {
+                    matched = true;
+                    if (pattern === patterns[0]) { // Artist - Album - Title
+                        document.getElementById('artist').value = match[1].trim();
+                        document.getElementById('album').value = match[2].trim();
+                        document.getElementById('title').value = match[3].trim();
+                    } else if (pattern === patterns[1]) { // Artist - Title
+                        document.getElementById('artist').value = match[1].trim();
+                        document.getElementById('title').value = match[2].trim();
+                    } else if (pattern === patterns[2]) { // 01. Artist - Title
+                        document.getElementById('track').value = match[1];
+                        document.getElementById('artist').value = match[2].trim();
+                        document.getElementById('title').value = match[3].trim();
+                    } else { // Just title
+                        document.getElementById('title').value = match[1].trim();
+                    }
+                    break;
+                }
+            }
+            
+            if (matched) {
+                showStatus('Extracted metadata from filename. You can edit or add more details.', 'success');
+            } else {
+                showStatus('Ready to add metadata manually.', 'warning');
+            }
+        }
+
+        function clearAllFields() {
+            const fields = ['title', 'artist', 'album', 'albumArtist', 'year', 'track', 'genre', 'composer', 'comment'];
             fields.forEach(field => {
                 document.getElementById(field).value = '';
             });
             
             // Clear artwork
-            const artworkPreview = document.getElementById('artworkPreview');
-            artworkPreview.innerHTML = '';
+            document.getElementById('artworkPreview').innerHTML = '';
+        }
+
+        function clearMetadataFields() {
+            clearAllFields();
         }
 
         // Artwork handling
@@ -663,7 +705,10 @@
         // Button handlers
         document.getElementById('loadMetadata').addEventListener('click', () => {
             if (currentFile) {
+                showStatus('Reloading metadata...', 'warning');
                 loadMetadataFromFile(currentFile);
+            } else {
+                showStatus('No file loaded to reload metadata from.', 'error');
             }
         });
 
